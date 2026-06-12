@@ -1,5 +1,7 @@
 # PriceSage – Project Overview
 
+> ⚠️ **SUPERSEDED (2026-06-11)** by [02_Redesign Plan.md](02_Redesign%20Plan.md). Kept for historical reference — the Selenium/Postgres-in-Docker/7-stage roadmap below no longer reflects the project.
+
 **"Track. Analyze. Buy Smart."**  
 An end-to-end system to track, analyze, alert, and eventually predict Finasteride price trends from local distributors.
 

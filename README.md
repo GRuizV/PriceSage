@@ -2,80 +2,32 @@
 
 **"Track. Analyze. Buy Smart."**
 
-PriceSage is an end-to-end pricing intelligence system that tracks daily prices of Finasteride from local distributors. It includes:
+PriceSage tracks finasteride prices across Colombian pharmacies daily, keeps the full price history, and emails me when it's a good moment to buy.
 
-- 📈 A headless web scraper to collect dynamic price data
-- 📊 Historical price visualization and trend analysis
-- 📬 Smart alerts when prices hit user-defined thresholds
-- 🤖 (Upcoming) Predictive analysis of future price trends
-- 📦 Dockerized deployment for local or cloud execution
+A personal tool, built to be **free to run, stable, and genuinely useful** — and maintained solo, end to end.
 
----
+## How it works
 
-## 🚀 Project Goals
+- **Collect** — one adapter per pharmacy hits the vendor's internal API and emits normalized price observations (vendor, brand, full price, discounted price, price-per-unit, stock). One vendor failing never kills the run.
+- **Store** — raw API snapshots committed to the repo (audit trail) + normalized rows in a free-tier Postgres (Neon).
+- **Schedule** — GitHub Actions cron runs the collector daily. No servers, no cost.
+- **Alert** — email when configured buy conditions are met (price threshold + stock).
 
-To automate the process of tracking Finasteride prices for personal use, while using the project to learn and demonstrate:
+Current vendors: **Cruz Verde** (more planned — see roadmap).
 
-- Data scraping with Selenium/Playwright
-- Data wrangling with Pandas
-- Visualization with Streamlit or Dash
-- Automation with cron / AWS Lambda
-- Notifications via email or messaging API
-- Predictive modeling with Scikit-learn
-- DevOps best practices using Docker and Git
+## Tech
 
----
+Python · requests · PostgreSQL (Neon) · GitHub Actions · pytest
 
-## 🛠️ Tech Stack
+## Status & roadmap
 
-| Purpose          | Technology                  |
-|------------------|---------------------------  |
-| Web Scraping     | Python, Selenium/Playwright |
-| Storage          | CSV / JSON / PostgreSQL     |
-| Dashboard        | Streamlit / Dash            |
-| Alerts           | SMTP, Twilio API            |
-| ML (Planned)     | Pandas, Scikit-learn        |
-| DevOps           | Docker, GitHub              |
-| Cloud            | AWS Free Tier: Lambda, S3   |
+Redesigned 2026-06-11 — see [docs/02_Redesign Plan.md](docs/02_Redesign%20Plan.md) for the working plan.
+Currently on: **Phase 1 — spikes** (session bootstrap, runner IP test).
 
----
-
-## 🧩 Project Stages
-
-1. **Stage 0 – Project Planning and Conceptualization**
-2. **Stage 1 – MVP Web Scraper**
-3. **Stage 2 – Automated Scheduling**
-4. **Stage 3 – Data Visualization Dashboard**
-5. **Stage 4 – Price Alert Notifications**
-6. **Stage 5 – Predictive Price Analysis**
-
----
-
-## ✅ Status
-
-> Currently working on: **Stage 0 – Project Planning**
-
----
-
-## 📄 License
+## License
 
 [MIT License](LICENSE)
 
----
+## Author
 
-## 🙋‍♂️ Author
-
-Built by Gerardo Ruiz
-Feel free to connect on [LinkedIn](https://www.linkedin.com/in/GRuizV/) or check out other projects on [GitHub](https://github.com/GRuizV).
-
-
-
-
-
-
-
-
-
-
-
-
+Built by Gerardo Ruiz — [LinkedIn](https://www.linkedin.com/in/GRuizV/) · [GitHub](https://github.com/GRuizV)
