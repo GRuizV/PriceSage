@@ -2,7 +2,7 @@
 
 *Created 2026-06-11, updated 2026-06-29. This is the working plan; it supersedes `00_Project Overview.md`.*
 
-**Progress:** Phases 0–2 done (core collector works end to end: `python -m pricesage` → live Cruz Verde data → `data/raw/cruz_verde.jsonl`, 9 tests passing). Provider scouting (Phase 6a) done early. **Next decision: S2 runner-IP spike vs Phase 3 Neon.**
+**Progress:** Phases 0–3 done. Collector runs end to end (`python -m pricesage` → live Cruz Verde → JSONL + Neon Postgres), 12 tests passing. S2 spike passed (GitHub Actions runner IP not blocked → runtime locked). Provider scouting (6a) done early. **Next: Phase 4 — daily cron + secrets + failure visibility.**
 
 ## What PriceSage is now
 
@@ -63,10 +63,10 @@ DB schema (minimal): `listings` (vendor, sku, brand, name) + `observations` (lis
 - [x] Orchestrator CLI (`python -m pricesage`, flags `--config/--vendor/--no-store`) + per-vendor failure isolation
 - [x] pytest suite: 9 tests (model + storage), all offline
 
-### Phase 3 — Neon Postgres
-- [ ] Create Neon project, define schema, connection via env var
-- [ ] DB writer + idempotency (re-running a day must not duplicate rows)
-- [ ] Backfill anything collected during Phase 2
+### Phase 3 — Neon Postgres ✅ (2026-06-29)
+- [x] Neon project created (free tier); schema in `storage/schema.sql` (listings + observations + `observation_details` view), connection via `DATABASE_URL` (.env, dotenv)
+- [x] DB writer with idempotent upsert on `(listing_id, obs_date)`; obs_date is Colombia-local. Verified real round-trip.
+- [ ] Backfill: optional, revisit (manual history lives outside repo; not blocking)
 
 ### Phase 4 — PROD scheduling
 - [ ] `collect.yml`: daily cron, secrets (DB URL, SMTP), commit raw data back to repo
