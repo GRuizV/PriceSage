@@ -1,0 +1,24 @@
+[project]
+name = "pricesage"
+version = "0.1.0"
+description = "Tracks finasteride prices across Colombian pharmacies daily, stores history, and emails buy alerts."
+requires-python = ">=3.12"
+dependencies = [
+    "requests>=2.32",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pricesage"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

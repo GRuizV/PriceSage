@@ -1,0 +1,14 @@
+# What PriceSage tracks.
+# Top-level key = vendor; each adapter reads only its own block.
+# Finasteride only for now. Add a product by adding a listing; add a vendor by
+# adding a new top-level block once its adapter exists.
+
+cruz_verde:
+  inventory_id: COCV_zona14   # store zone — prices/stock vary by zone
+  listings:
+    - sku: COCV_55507
+      brand: Pharmadem
+      units_per_box: 28
+    - sku: COCV_95278
+      brand: Lafrancol
+      units_per_box: 28

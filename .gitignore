@@ -1,2 +1,19 @@
 # VSCode Dirs
 /.vscode*
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Secrets
+.env
+
+# Manual-collection debug dumps
+99 manual collection/pdp_*.json
+
+# Misc
+log/
+*.log

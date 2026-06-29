@@ -1,6 +1,8 @@
 # PriceSage — Redesign Plan (v2)
 
-*Created 2026-06-11. This is the working plan; it supersedes `00_Project Overview.md`.*
+*Created 2026-06-11, updated 2026-06-29. This is the working plan; it supersedes `00_Project Overview.md`.*
+
+**Progress:** Phases 0–2 done (core collector works end to end: `python -m pricesage` → live Cruz Verde data → `data/raw/cruz_verde.jsonl`, 9 tests passing). Provider scouting (Phase 6a) done early. **Next decision: S2 runner-IP spike vs Phase 3 Neon.**
 
 ## What PriceSage is now
 
@@ -22,23 +24,26 @@ Guiding filter for every decision: **free, stable, useful, and provably mine** (
 ## Architecture
 
 ```
-config/products.yml          # SKUs per vendor, store zone, alert thresholds
+config/products.yml          # [done] vendor blocks: store zone + listings (sku, brand, units_per_box)
 src/pricesage/
-  models.py                  # PriceObservation (normalized record)
-  adapters/                  # one module per vendor, all return list[PriceObservation]
-    base.py
-    cruz_verde.py
+  config.py                  # [done] load products.yml
+  models.py                  # [done] PriceObservation (normalized record + per-unit/%off)
+  adapters/
+    base.py                  # [done] VendorAdapter contract (per-listing resilient)
+    cruz_verde.py            # [done] self-bootstrapping connect.sid session
   storage/
-    raw.py                   # append raw API JSON → data/raw/ (committed)
-    db.py                    # write observations → Neon Postgres
-  alerts.py                  # buy-condition rules → email
-  main.py                    # CLI orchestrator; one vendor failing never kills the run
-data/raw/                    # bronze layer, JSONL per vendor
-.github/workflows/collect.yml
-tests/
+    raw.py                   # [done] append normalized observations → data/raw/{vendor}.jsonl
+    db.py                    # [todo] write observations → Neon Postgres
+  alerts.py                  # [todo] buy-condition rules → email
+  main.py / __main__.py      # [done] CLI orchestrator; one vendor failing never kills the run
+data/raw/                    # [done] committed history, JSONL per vendor
+.github/workflows/collect.yml  # [todo]
+tests/                       # [done] 9 tests (model + storage), offline
 ```
 
-DB schema (minimal): `listings` (vendor, sku, brand, name) + `observations` (listing_id, scraped_at, full_price, disc_price, pum, stock). Extend only when a real need appears.
+**Storage layering decision (2026-06-29):** `raw.py` stores *normalized observations* as JSONL (immediately useful, testable history), not raw API JSON. When Postgres lands, decide whether `data/raw` becomes true raw-API bronze or retires — it's marked provisional, so no raw-capture machinery built yet.
+
+DB schema (minimal): `listings` (vendor, sku, brand, name) + `observations` (listing_id, scraped_at, full_price, disc_price, price_source, units_per_box, stock). Extend only when a real need appears.
 
 ## Phases
 
@@ -47,55 +52,16 @@ DB schema (minimal): `listings` (vendor, sku, brand, name) + `observations` (lis
 - [x] This plan written; README rewritten
 
 ### Phase 1 — Spikes (de-risk before building)
-- [ ] **S1: Session bootstrap.** Find the endpoint that mints `connect.sid` (fresh incognito + DevTools, watch for first `Set-Cookie`). Deliverable: a function that returns a fresh session cookie.
-  - Request Shape:
-  ```python
-    import requests
+- [x] **S1: Session bootstrap.** ✅ (2026-06-29) `POST https://api.cruzverde.com.co/customer-service/login` with empty body `{}` → 201, `authType: guest`, sets `connect.sid`. No copied cookies needed. Implemented in `cruz_verde.py:_new_session()`.
+- [ ] **S2: Runner IP test.** Minimal script/workflow hitting the Cruz Verde API from a GitHub Actions runner. Pass → GH Actions confirmed; fail → evaluate Lambda. **← gates the runtime decision; do before investing in scheduling.**
 
-    cookies = {
-        '_ga': 'GA1.3.1852395052.1781278795',
-        '_gid': 'GA1.3.914356628.1781278795',
-        '_gat': '1',
-        '_gcl_au': '1.1.987109452.1781278796',
-        '_fbp': 'fb.1.1781278795825.1506076338',
-        '_ga': 'GA1.1.1852395052.1781278795',
-        '_ga_CVCO': 'GS2.1.s1781278796$o1$g0$t1781278796$j60$l0$h1302745312',
-    }
-
-    headers = {
-        'accept': 'application/json, text/plain, */*',
-        'accept-language': 'es-ES,es;q=0.9',
-        'cache-control': 'no-cache',
-        # Already added when you pass json=
-        # 'content-type': 'application/json',
-        'dnt': '1',
-        'origin': 'https://www.cruzverde.com.co',
-        'pragma': 'no-cache',
-        'priority': 'u=1, i',
-        'referer': 'https://www.cruzverde.com.co/',
-        'sec-ch-ua': '"Google Chrome";v="149", "Chromium";v="149", "Not)A;Brand";v="24"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'same-site',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36',
-    }
-
-    json_data = {}
-
-    response = requests.post('https://api.cruzverde.com.co/customer-service/login', cookies=cookies, headers=headers, json=json_data)
-  ```
-
-- [ ] **S2: Runner IP test.** Minimal script hitting the Cruz Verde API from a GitHub Actions runner. Pass → GH Actions confirmed; fail → evaluate Lambda.
-
-### Phase 2 — Core build (local, collects real history from day one)
-- [ ] Package scaffold + `config/products.yml` (finasteride SKUs, `COCV_zona14` as config)
-- [ ] `PriceObservation` model
-- [ ] Cruz Verde adapter (self-bootstrapping session; fix inverted %-off; drop dead cookies)
-- [ ] Raw layer: append JSONL per run
-- [ ] Orchestrator CLI + per-vendor failure isolation
-- [ ] Micro-test each step; small pytest suite for parsing/normalization
+### Phase 2 — Core build ✅ (2026-06-29) — collects real history from day one
+- [x] Package scaffold (uv + src layout) + `config/products.yml` (finasteride SKUs, `COCV_zona14` as config)
+- [x] `PriceObservation` model (computed `price_per_unit` + `discount_pct`, `price_source` audit field)
+- [x] Cruz Verde adapter (self-bootstrapping session; fixed inverted %-off; dropped dead cookies)
+- [x] Raw layer: append-only JSONL per vendor
+- [x] Orchestrator CLI (`python -m pricesage`, flags `--config/--vendor/--no-store`) + per-vendor failure isolation
+- [x] pytest suite: 9 tests (model + storage), all offline
 
 ### Phase 3 — Neon Postgres
 - [ ] Create Neon project, define schema, connection via env var
@@ -112,8 +78,8 @@ DB schema (minimal): `listings` (vendor, sku, brand, name) + `observations` (lis
 - [ ] Email sender + "already alerted" suppression (don't re-mail daily for the same price)
 
 ### Phase 6 — Second provider
-- [ ] Scout candidates (Farmatodo, La Rebaja, Locatel, Colsubsidio…) — classify by tier (API / HTML / browser-gated)
-- [ ] Build adapter for the easiest one → proves the adapter pattern
+- [x] **6a: Scout candidates** ✅ (2026-06-12) — all 9 sources are Tier 1 (plain HTTP, no browser). 4 adapter families cover everything: CruzVerde / VTEX×4 / WooCommerce / ld+json HTML×3. Full request shapes in `99 manual collection/02 providers guide.md`.
+- [ ] **6b: Build adapter for the easiest one** → VTEX (covers FarmaExpress, Colsubsidio, La Rebaja, tudrogueriavirtual at once) → proves the adapter pattern
 
 ### Parked (revisit only with months of data and a stable collector)
 - Streamlit dashboard · price prediction · Docker
@@ -122,8 +88,8 @@ DB schema (minimal): `listings` (vendor, sku, brand, name) + `observations` (lis
 - `00 tests & notes.ipynb` + `01 formatted_comparison.md` stay untouched and working — they're the manual runner until PROD replaces them.
 - Historical daily entries exist outside the repo; they'll be migrated in when dashboard/ML phases arrive.
 
-## Known issues being fixed in Phase 2
-- Hardcoded browser cookies (rot + tied to personal session) → self-bootstrap
-- "% Off" math inverted (shows 95% for a 5% discount)
-- No history persisted (output overwritten each run)
-- Duplicate `_ga` key in cookies dict
+## Known issues — all fixed in Phase 2 ✅
+- [x] Hardcoded browser cookies (rot + tied to personal session) → self-bootstrap per run
+- [x] "% Off" math inverted (showed 95% for a 5% discount) → correct now
+- [x] No history persisted (output overwritten each run) → append-only JSONL
+- [x] Duplicate `_ga` key in cookies dict → cookie jar gone entirely
