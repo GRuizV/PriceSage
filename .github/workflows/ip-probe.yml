@@ -1,0 +1,25 @@
+# S2 spike — does Cruz Verde answer from a GitHub Actions runner IP?
+# Manual-trigger only. If this returns observations, GitHub Actions is a viable
+# runtime; if it 401s/blocks, we fall back to AWS Lambda. Delete after deciding.
+name: ip-probe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up environment
+        run: uv sync --extra dev
+
+      - name: Show runner public IP
+        run: curl -s https://api.ipify.org; echo
+
+      - name: Run collector (no store)
+        run: uv run python -m pricesage --no-store
