@@ -6,14 +6,24 @@ Entry point for `python -m pricesage`.
 from __future__ import annotations
 
 import argparse
-import logging
+import sys
+
+from loguru import logger
 
 from pricesage.config import load_config
 from pricesage.models import PriceObservation
 from pricesage.adapters.cruz_verde import CruzVerdeAdapter
 from pricesage.storage.raw import append_observations
 
-log = logging.getLogger("pricesage")
+
+def configure_logging(level: str = "INFO") -> None:
+    """Route loguru to stderr with a compact format (color auto-off in CI)."""
+    logger.remove()
+    logger.add(
+        sys.stderr,
+        level=level,
+        format="<level>{level: <8}</level> | <cyan>{name}</cyan> - {message}",
+    )
 
 
 def _build_cruz_verde(block: dict) -> CruzVerdeAdapter:
@@ -37,14 +47,14 @@ def collect_all(config: dict, only: str | None = None) -> list[PriceObservation]
             continue
         builder = ADAPTER_BUILDERS.get(vendor)
         if builder is None:
-            log.warning("no adapter for vendor '%s'; skipping", vendor)
+            logger.warning("no adapter for vendor '{}'; skipping", vendor)
             continue
         try:
             vendor_obs = builder(block).collect()
         except Exception:
-            log.exception("vendor '%s' failed entirely; skipping", vendor)
+            logger.exception("vendor '{}' failed entirely; skipping", vendor)
             continue
-        log.info("vendor '%s': %d observation(s)", vendor, len(vendor_obs))
+        logger.info("vendor '{}': {} observation(s)", vendor, len(vendor_obs))
         observations.extend(vendor_obs)
     return observations
 
@@ -54,14 +64,14 @@ def run(config_path=None, only=None, store=True, use_db=True) -> list[PriceObser
     observations = collect_all(config, only=only)
 
     if not store:
-        log.info("--no-store: %d observation(s) collected, not written", len(observations))
+        logger.info("--no-store: {} observation(s) collected, not written", len(observations))
         return observations
     if not observations:
         return observations
 
     counts = append_observations(observations)
     for vendor, n in counts.items():
-        log.info("stored %d observation(s) -> data/raw/%s.jsonl", n, vendor)
+        logger.info("stored {} observation(s) -> data/raw/{}.jsonl", n, vendor)
 
     if use_db:
         from pricesage.storage import db
@@ -69,9 +79,9 @@ def run(config_path=None, only=None, store=True, use_db=True) -> list[PriceObser
         url = db.get_database_url()
         if url:
             n = db.store(observations, url)
-            log.info("stored %d observation(s) -> Postgres", n)
+            logger.info("stored {} observation(s) -> Postgres", n)
         else:
-            log.info("no DATABASE_URL set; skipping Postgres")
+            logger.info("no DATABASE_URL set; skipping Postgres")
 
     return observations
 
@@ -84,14 +94,14 @@ def main() -> None:
     parser.add_argument("--no-db", action="store_true", help="write JSONL but skip Postgres")
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    configure_logging()
     observations = run(
         config_path=args.config,
         only=args.vendor,
         store=not args.no_store,
         use_db=not args.no_db,
     )
-    log.info("done: %d observation(s) total", len(observations))
+    logger.info("done: {} observation(s) total", len(observations))
 
 
 if __name__ == "__main__":

@@ -7,7 +7,6 @@ duplicating it, so the cron is safe to fire more than once.
 
 from __future__ import annotations
 
-import logging
 import os
 from datetime import date, datetime
 from pathlib import Path
@@ -17,8 +16,6 @@ import psycopg
 from dotenv import load_dotenv
 
 from pricesage.models import PriceObservation
-
-log = logging.getLogger(__name__)
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 _BOGOTA = ZoneInfo("America/Bogota")

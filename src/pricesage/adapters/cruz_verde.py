@@ -7,14 +7,11 @@ endpoint, so nothing copied from a browser can rot.
 
 from __future__ import annotations
 
-import logging
-
 import requests
+from loguru import logger
 
 from pricesage.adapters.base import VendorAdapter
 from pricesage.models import PriceObservation
-
-log = logging.getLogger(__name__)
 
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -45,10 +42,10 @@ class CruzVerdeAdapter(VendorAdapter):
             try:
                 obs = self._fetch_one(session, listing)
             except Exception:
-                log.exception("cruz_verde: failed to fetch %s", listing.get("sku"))
+                logger.exception("cruz_verde: failed to fetch {}", listing.get("sku"))
                 continue
             if obs is None:
-                log.warning("cruz_verde: no data for %s", listing.get("sku"))
+                logger.warning("cruz_verde: no data for {}", listing.get("sku"))
             else:
                 observations.append(obs)
         return observations
@@ -89,7 +86,7 @@ class CruzVerdeAdapter(VendorAdapter):
         prices = node.get("prices") or {}
         full_price = prices.get(self.LIST_KEY)
         if full_price is None:
-            log.warning("cruz_verde: %s has no %s", sku, self.LIST_KEY)
+            logger.warning("cruz_verde: {} has no {}", sku, self.LIST_KEY)
             return None
 
         disc_price, price_source = full_price, self.LIST_KEY
