@@ -6,6 +6,7 @@ Entry point for `python -m pricesage`.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from loguru import logger
@@ -20,15 +21,28 @@ from pricesage.storage.raw import append_observations
 from pricesage.adapters.cruz_verde import CruzVerdeAdapter
 
 
-def configure_logging(level: str = "INFO") -> None:
+def in_ci() -> bool:
+    """True when running on a CI runner (GitHub Actions sets both)."""
+    return os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+
+
+def configure_logging(level: str = "INFO", diagnose: bool | None = None) -> None:
     """Route loguru to stderr with a fully traceable format (color auto-off in CI).
 
     Format: timestamp | LEVEL | module:function:line - message
+
+    `diagnose` controls loguru's rich tracebacks (variable-value annotations).
+    Great locally, but they can leak secrets (e.g. DATABASE_URL) into a public
+    CI log — so it defaults OFF in CI, ON everywhere else.
     """
+    if diagnose is None:
+        diagnose = not in_ci()
     logger.remove()
     logger.add(
         sys.stderr,
         level=level,
+        backtrace=diagnose,
+        diagnose=diagnose,
         format=(
             "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
             "<level>{level: <8}</level> | "
