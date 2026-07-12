@@ -78,11 +78,15 @@ class CruzVerdeAdapter(VendorAdapter):
             observations.append(obs)
 
         if not observations:
+            # Reached the vendor (2xx) but parsed nothing -> 'empty'; otherwise
+            # the requests themselves failed -> 'error'.
+            reached_ok = last_status is not None and 200 <= last_status < 300
             raise VendorError(
                 self.vendor,
                 "no observations (all listings missing or failing)",
                 status=last_status,
                 body=last_body,
+                kind="empty" if reached_ok else "error",
             )
         return observations
 

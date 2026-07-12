@@ -12,7 +12,7 @@ from loguru import logger
 
 from pricesage.config import load_config
 from pricesage.errors import VendorError
-from pricesage.models import PriceObservation
+from pricesage.models import PriceObservation, VendorRun
 from pricesage.retry import DEFAULT_ATTEMPTS, DEFAULT_COOLDOWN, call_with_retry
 from pricesage.storage import db
 from pricesage.storage.raw import append_observations
@@ -50,38 +50,69 @@ ADAPTER_BUILDERS = {
 }
 
 
+def _run_vendor(vendor, adapter, attempts, cooldown) -> tuple[list[PriceObservation], VendorRun]:
+    """Collect one vendor with retry. Returns (observations, run-status row)."""
+    attempts_used = 0
+
+    def _attempt():
+        nonlocal attempts_used
+        attempts_used += 1
+        return adapter.collect()
+
+    try:
+        obs = call_with_retry(
+            _attempt, label=f"vendor '{vendor}'", attempts=attempts, cooldown=cooldown
+        )
+    except VendorError as exc:
+        # Failed every attempt — expected, tracked; skip this vendor.
+        logger.error("vendor '{}' failed after {} attempt(s); skipping", vendor, attempts_used)
+        run = VendorRun(
+            vendor=vendor,
+            status=exc.kind,
+            attempts=attempts_used,
+            observations=0,
+            error_type=f"HTTP {exc.status}" if exc.status is not None else exc.kind,
+            error_detail=exc.message,
+        )
+        return [], run
+
+    logger.info("vendor '{}': {} observation(s)", vendor, len(obs))
+    run = VendorRun(vendor=vendor, status="ok", attempts=attempts_used, observations=len(obs))
+    return obs, run
+
+
 def collect_all(
     config: dict,
     only: str | None = None,
     attempts: int = DEFAULT_ATTEMPTS,
     cooldown: float = DEFAULT_COOLDOWN,
-) -> list[PriceObservation]:
+) -> tuple[list[PriceObservation], list[VendorRun]]:
     
-    """Run each configured vendor, with retry. One vendor failing never stops the others."""
-    
+    """Run each configured vendor with retry. One vendor failing never stops the others.
+
+    Returns (observations, runs) — a run-status row is produced for every vendor
+    actually attempted (success or failure).
+    """
+
     observations: list[PriceObservation] = []
+    runs: list[VendorRun] = []
+
     for vendor, block in config.items():
+
         if only and vendor != only:
             continue
+
         builder = ADAPTER_BUILDERS.get(vendor)
+
         if builder is None:
             logger.warning("no adapter for vendor '{}'; skipping", vendor)
             continue
-        adapter = builder(block)
-        try:
-            vendor_obs = call_with_retry(
-                adapter.collect,
-                label=f"vendor '{vendor}'",
-                attempts=attempts,
-                cooldown=cooldown,
-            )
-        except VendorError:
-            # Failed every attempt — expected, tracked; skip this vendor.
-            logger.error("vendor '{}' failed after {} attempt(s); skipping", vendor, attempts)
-            continue
-        logger.info("vendor '{}': {} observation(s)", vendor, len(vendor_obs))
-        observations.extend(vendor_obs)
-    return observations
+        
+        obs, run = _run_vendor(vendor, builder(block), attempts, cooldown)
+        observations.extend(obs)
+        runs.append(run)
+
+    return observations, runs
 
 
 def run(
@@ -94,26 +125,26 @@ def run(
 ) -> list[PriceObservation]:
 
     config = load_config(config_path)
-    observations = collect_all(config, only=only, attempts=attempts, cooldown=cooldown)
+    observations, runs = collect_all(config, only=only, attempts=attempts, cooldown=cooldown)
 
     if not store:
         logger.info("--no-store: {} observation(s) collected, not written", len(observations))
         return observations
-    
-    if not observations:
-        return observations
 
-    counts = append_observations(observations)
+    if observations:
+        counts = append_observations(observations)
+        for vendor, n in counts.items():
+            logger.info("stored {} observation(s) -> data/raw/{}.jsonl", n, vendor)
 
-    for vendor, n in counts.items():
-        logger.info("stored {} observation(s) -> data/raw/{}.jsonl", n, vendor)
-
-    if use_db:       
-
+    if use_db:
         url = db.get_database_url()
         if url:
-            n = db.store(observations, url)
-            logger.info("stored {} observation(s) -> Postgres", n)
+            if observations:
+                n = db.store(observations, url)
+                logger.info("stored {} observation(s) -> Postgres", n)
+            if runs:
+                db.record_runs(runs, url)
+                logger.info("recorded {} run-status row(s) -> Postgres", len(runs))
         else:
             logger.info("no DATABASE_URL set; skipping Postgres")
 

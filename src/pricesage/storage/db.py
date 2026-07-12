@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 import psycopg
 from dotenv import load_dotenv
 
-from pricesage.models import PriceObservation
+from pricesage.models import PriceObservation, VendorRun
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 _BOGOTA = ZoneInfo("America/Bogota")
@@ -62,6 +62,39 @@ def store(observations: list[PriceObservation], database_url: str | None = None)
                 _upsert_observation(cur, listing_id, obs)
         conn.commit()
     return len(observations)
+
+
+def record_runs(runs: list[VendorRun], database_url: str | None = None) -> int:
+    """Append one health row per vendor run. Returns the number written."""
+    if not runs:
+        return 0
+    url = database_url or get_database_url()
+    if not url:
+        raise RuntimeError("DATABASE_URL is not set")
+    with psycopg.connect(url) as conn:
+        ensure_schema(conn)
+        with conn.cursor() as cur:
+            for r in runs:
+                cur.execute(
+                    """
+                    INSERT INTO collection_runs
+                        (vendor, run_at, run_date, status, attempts, observations,
+                         error_type, error_detail)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        r.vendor,
+                        r.run_at,
+                        observation_date(r.run_at),
+                        r.status,
+                        r.attempts,
+                        r.observations,
+                        r.error_type,
+                        r.error_detail,
+                    ),
+                )
+        conn.commit()
+    return len(runs)
 
 
 def _upsert_listing(cur: psycopg.Cursor, obs: PriceObservation) -> int:

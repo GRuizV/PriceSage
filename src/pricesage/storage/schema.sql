@@ -25,6 +25,23 @@ CREATE TABLE IF NOT EXISTS observations (
     UNIQUE (listing_id, obs_date)             -- one row per product per day; re-runs upsert
 );
 
+-- Health log: one appended row per vendor per run (success or failure).
+-- Source of truth for the persistent-failure alert and a future health dashboard.
+CREATE TABLE IF NOT EXISTS collection_runs (
+    id           SERIAL      PRIMARY KEY,
+    vendor       TEXT        NOT NULL,
+    run_at       TIMESTAMPTZ NOT NULL,        -- exact UTC instant of the run
+    run_date     DATE        NOT NULL,        -- Colombia-local day
+    status       TEXT        NOT NULL,        -- ok | empty | error
+    attempts     INTEGER     NOT NULL,        -- tries used before resolving
+    observations INTEGER     NOT NULL DEFAULT 0,
+    error_type   TEXT,                        -- e.g. HTTP 404 (null when ok)
+    error_detail TEXT                         -- short message (null when ok)
+);
+
+CREATE INDEX IF NOT EXISTS idx_collection_runs_vendor_run_at
+    ON collection_runs (vendor, run_at DESC);
+
 -- Convenience view: joins identity + adds the derived per-unit price and % off,
 -- so dashboard/alert queries don't recompute them.
 CREATE OR REPLACE VIEW observation_details AS

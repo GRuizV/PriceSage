@@ -43,4 +43,10 @@ def test_vendor_error_carries_response():
     assert err.vendor == "cruz_verde"
     assert err.status == 403
     assert err.body == "<html>blocked</html>"
+    assert err.kind == "error"  # default
     assert "cruz_verde" in str(err) and "HTTP 403" in str(err)
+
+
+def test_vendor_error_kind_can_be_empty():
+    err = VendorError("cruz_verde", "nothing", status=200, kind="empty")
+    assert err.kind == "empty"

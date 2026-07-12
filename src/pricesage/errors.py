@@ -24,10 +24,14 @@ class VendorError(Exception):
         *,
         status: int | None = None,
         body: str | None = None,
+        kind: str = "error",
     ):
         self.vendor = vendor
         self.message = message
         self.status = status
         self.body = body
+        # kind maps to collection_runs.status: 'error' (couldn't reach/read the
+        # vendor) vs 'empty' (reached it, but nothing usable came back).
+        self.kind = kind
         detail = f" (HTTP {status})" if status is not None else ""
         super().__init__(f"[{vendor}] {message}{detail}")

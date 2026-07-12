@@ -62,3 +62,21 @@ class PriceObservation:
         d["price_per_unit"] = str(self.price_per_unit)
         d["discount_pct"] = self.discount_pct
         return d
+
+
+@dataclass(slots=True)
+class VendorRun:
+    """Outcome of one vendor's collection in one run — feeds `collection_runs`.
+
+    Recorded for every attempted vendor, success or failure, so the health of
+    the pipeline is queryable and the Layer-2 persistent-failure alert has a
+    source of truth.
+    """
+
+    vendor: str
+    status: str                        # 'ok' | 'empty' | 'error'
+    attempts: int                      # tries used (1 = succeeded first go)
+    observations: int                  # how many observations were collected
+    run_at: datetime = field(default_factory=_utcnow)
+    error_type: str | None = None      # e.g. 'HTTP 404' (None when ok)
+    error_detail: str | None = None    # short message (None when ok)
