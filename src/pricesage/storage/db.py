@@ -97,6 +97,35 @@ def record_runs(runs: list[VendorRun], database_url: str | None = None) -> int:
     return len(runs)
 
 
+def vendor_health(database_url: str | None = None) -> list[dict]:
+    """Per vendor, the last successful run date and the last run date.
+
+    `last_ok` is None if the vendor has never had an 'ok' run. Reads the whole
+    collection_runs history, so it reflects persistent state across runs.
+    """
+    url = database_url or get_database_url()
+    if not url:
+        raise RuntimeError("DATABASE_URL is not set")
+    with psycopg.connect(url) as conn:
+        ensure_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT vendor,
+                       MAX(run_date) FILTER (WHERE status = 'ok') AS last_ok,
+                       MAX(run_date) AS last_run
+                FROM collection_runs
+                GROUP BY vendor
+                ORDER BY vendor
+                """
+            )
+            rows = cur.fetchall()
+    return [
+        {"vendor": vendor, "last_ok": last_ok, "last_run": last_run}
+        for (vendor, last_ok, last_run) in rows
+    ]
+
+
 def _upsert_listing(cur: psycopg.Cursor, obs: PriceObservation) -> int:
     cur.execute(
         """

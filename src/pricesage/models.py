@@ -80,3 +80,4 @@ class VendorRun:
     run_at: datetime = field(default_factory=_utcnow)
     error_type: str | None = None      # e.g. 'HTTP 404' (None when ok)
     error_detail: str | None = None    # short message (None when ok)
+    error_body: str | None = None      # raw failure response, in-memory only (not stored in DB)

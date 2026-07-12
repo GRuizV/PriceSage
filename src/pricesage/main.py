@@ -10,11 +10,12 @@ import sys
 
 from loguru import logger
 
+from pricesage import alerts
 from pricesage.config import load_config
 from pricesage.errors import VendorError
 from pricesage.models import PriceObservation, VendorRun
 from pricesage.retry import DEFAULT_ATTEMPTS, DEFAULT_COOLDOWN, call_with_retry
-from pricesage.storage import db
+from pricesage.storage import db, debug
 from pricesage.storage.raw import append_observations
 from pricesage.adapters.cruz_verde import CruzVerdeAdapter
 
@@ -73,6 +74,7 @@ def _run_vendor(vendor, adapter, attempts, cooldown) -> tuple[list[PriceObservat
             observations=0,
             error_type=f"HTTP {exc.status}" if exc.status is not None else exc.kind,
             error_detail=exc.message,
+            error_body=exc.body,
         )
         return [], run
 
@@ -131,6 +133,11 @@ def run(
         logger.info("--no-store: {} observation(s) collected, not written", len(observations))
         return observations
 
+    for r in runs:
+        if r.error_body:
+            path = debug.dump_failure(r.vendor, r.error_body, when=r.run_at)
+            logger.info("dumped {} failure body -> {}", r.vendor, path)
+
     if observations:
         counts = append_observations(observations)
         for vendor, n in counts.items():
@@ -145,6 +152,9 @@ def run(
             if runs:
                 db.record_runs(runs, url)
                 logger.info("recorded {} run-status row(s) -> Postgres", len(runs))
+            failures = alerts.check_and_log(database_url=url)
+            if failures:
+                logger.warning("{} vendor(s) in persistent-failure state", len(failures))
         else:
             logger.info("no DATABASE_URL set; skipping Postgres")
 
