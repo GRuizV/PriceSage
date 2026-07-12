@@ -11,7 +11,9 @@ import requests
 from loguru import logger
 
 from pricesage.adapters.base import VendorAdapter
+from pricesage.errors import VendorError
 from pricesage.models import PriceObservation
+
 
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -19,7 +21,17 @@ _USER_AGENT = (
 )
 
 
+def _response_parts(resp: requests.Response | None) -> tuple[int | None, str | None]:
+
+    """Pull (status, body) off a response for VendorError, tolerating None."""
+    if resp is None:
+        return None, None
+    
+    return resp.status_code, resp.text
+
+
 class CruzVerdeAdapter(VendorAdapter):
+
     vendor = "cruz_verde"
 
     API = "https://api.cruzverde.com.co"
@@ -36,18 +48,42 @@ class CruzVerdeAdapter(VendorAdapter):
         self.timeout = timeout
 
     def collect(self) -> list[PriceObservation]:
+        """Return observations. Raise VendorError on total failure or empty.
+
+        A single listing missing/erroring is tolerated (partial result); only a
+        run that yields *zero* observations raises — carrying the last response
+        seen, so the orchestrator can dump it for diagnosis.
+        """
         session = self._new_session()
+
         observations: list[PriceObservation] = []
+        last_status: int | None = None
+        last_body: str | None = None
+
         for listing in self.listings:
+            sku = listing.get("sku")
             try:
-                obs = self._fetch_one(session, listing)
-            except Exception:
-                logger.exception("cruz_verde: failed to fetch {}", listing.get("sku"))
+                resp = session.get(self._summary_url(sku), timeout=self.timeout)
+                last_status, last_body = resp.status_code, resp.text
+                resp.raise_for_status()
+                obs = self._parse(resp.json(), listing)
+            except requests.RequestException as exc:
+                last_status, last_body = _response_parts(exc.response)
+                logger.warning("cruz_verde: request failed for {}: {}", sku, exc)
                 continue
+
             if obs is None:
-                logger.warning("cruz_verde: no data for {}", listing.get("sku"))
-            else:
-                observations.append(obs)
+                logger.warning("cruz_verde: no usable data for {}", sku)
+                continue
+            observations.append(obs)
+
+        if not observations:
+            raise VendorError(
+                self.vendor,
+                "no observations (all listings missing or failing)",
+                status=last_status,
+                body=last_body,
+            )
         return observations
 
     def _new_session(self) -> requests.Session:
@@ -62,10 +98,16 @@ class CruzVerdeAdapter(VendorAdapter):
                 "user-agent": _USER_AGENT,
             }
         )
-        resp = session.post(f"{self.API}/customer-service/login", json={}, timeout=self.timeout)
-        resp.raise_for_status()
+        try:
+            resp = session.post(f"{self.API}/customer-service/login", json={}, timeout=self.timeout)
+            resp.raise_for_status()
+        except requests.RequestException as exc:
+            status, body = _response_parts(exc.response)
+            raise VendorError(
+                self.vendor, "session bootstrap failed", status=status, body=body
+            ) from exc
         if "connect.sid" not in session.cookies:
-            raise RuntimeError("Cruz Verde login did not set connect.sid")
+            raise VendorError(self.vendor, "login did not set connect.sid")
         return session
 
     def _summary_url(self, sku: str) -> str:
@@ -75,11 +117,9 @@ class CruzVerdeAdapter(VendorAdapter):
             f"?ids[]={sku}{fields}&inventoryId={self.inventory_id}"
         )
 
-    def _fetch_one(self, session: requests.Session, listing: dict) -> PriceObservation | None:
+    def _parse(self, payload: dict, listing: dict) -> PriceObservation | None:
         sku = listing["sku"]
-        resp = session.get(self._summary_url(sku), timeout=self.timeout)
-        resp.raise_for_status()
-        node = resp.json().get(sku)
+        node = payload.get(sku)
         if not node:
             return None
 
