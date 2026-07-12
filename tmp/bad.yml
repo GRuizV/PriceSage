@@ -1,0 +1,6 @@
+cruz_verde:
+  inventory_id: COCV_zona14
+  listings:
+    - sku: COCV_NOPE
+      brand: Bogus
+      units_per_box: 28
