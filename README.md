@@ -1,5 +1,8 @@
 # PriceSage
 
+[![tests](https://github.com/GRuizV/PriceSage/actions/workflows/tests.yml/badge.svg)](https://github.com/GRuizV/PriceSage/actions/workflows/tests.yml)
+[![collect](https://github.com/GRuizV/PriceSage/actions/workflows/collect.yml/badge.svg)](https://github.com/GRuizV/PriceSage/actions/workflows/collect.yml)
+
 **"Track. Analyze. Buy Smart."**
 
 PriceSage tracks finasteride prices across Colombian pharmacies daily, keeps the full price history, and emails me when it's a good moment to buy.
